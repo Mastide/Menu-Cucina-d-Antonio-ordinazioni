@@ -20,37 +20,40 @@ export default function App() {
   const [activeDay, setActiveDay] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [adminUser, setAdminUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
-  // Carica dati iniziali
   useEffect(() => {
     loadMenu();
     loadOrders();
     loadSuspended();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAdminUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAdminUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Realtime: nuovi ordini
   useEffect(() => {
     const channel = supabase
       .channel("orders-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
-        loadOrders();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadOrders())
       .subscribe();
-
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Realtime: stato sospensione
   useEffect(() => {
     const channel = supabase
       .channel("settings-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, (payload) => {
-        if (payload.new?.key === "suspended") {
-          setSuspended(payload.new.value === "true");
-        }
+        if (payload.new?.key === "suspended") setSuspended(payload.new.value === "true");
       })
       .subscribe();
-
     return () => supabase.removeChannel(channel);
   }, []);
 
@@ -74,11 +77,31 @@ export default function App() {
     if (data) setSuspended(data.value === "true");
   }
 
+  async function handleLogin() {
+    setLoginLoading(true);
+    setLoginError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginForm.email,
+      password: loginForm.password,
+    });
+    if (error) {
+      setLoginError("Email o password non corretti.");
+    } else {
+      setShowLogin(false);
+      setView("admin");
+    }
+    setLoginLoading(false);
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setView("client");
+  }
+
   async function handleOrder() {
     if (!orderForm.name.trim()) return;
     const hasItem = orderForm.primo || orderForm.secondo || orderForm.contorno || orderForm.dessert;
     if (!hasItem) return;
-
     setSubmitting(true);
     const { error } = await supabase.from("orders").insert([{
       name: orderForm.name,
@@ -88,7 +111,6 @@ export default function App() {
       dessert: orderForm.dessert,
       note: orderForm.note,
     }]);
-
     if (!error) {
       setOrderSent(true);
       setOrderForm({ name: "", primo: false, secondo: false, contorno: false, dessert: false, note: "" });
@@ -166,6 +188,29 @@ export default function App() {
         .suspended-banner { background: #8b2020; color: white; text-align: center; padding: 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; letter-spacing: 0.5px; }
       `}</style>
 
+      {/* Login modal */}
+      {showLogin && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div className="fade-in" style={{ background: "#f5f0e8", padding: "40px", width: 360, maxWidth: "90vw" }}>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, color: "#2c2c2c", marginBottom: 6 }}>Accesso Admin</h2>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#888", marginBottom: 24 }}>Area riservata</p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Email</label>
+              <input type="email" value={loginForm.email} onChange={(e) => setLoginForm((f) => ({ ...f, email: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Password</label>
+              <input type="password" value={loginForm.password} onChange={(e) => setLoginForm((f) => ({ ...f, password: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
+            </div>
+            {loginError && <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#8b2020", marginBottom: 16 }}>{loginError}</div>}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="btn-primary" onClick={handleLogin} disabled={loginLoading}>{loginLoading ? "Accesso..." : "Accedi"}</button>
+              <button className="btn-ghost" onClick={() => { setShowLogin(false); setLoginError(""); }}>Annulla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header style={{ background: "#2c2c2c", padding: "0 32px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
@@ -173,13 +218,24 @@ export default function App() {
             <h1 style={{ fontFamily: "'Playfair Display', serif", color: "#f5f0e8", fontSize: 22, fontWeight: 600 }}>La Mensa</h1>
             <span style={{ color: "#888", fontSize: 12, letterSpacing: 1 }}>UFFICIO</span>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button className="day-tab" onClick={() => setView("client")} style={{ color: view === "client" ? "#f5f0e8" : "#888", borderBottomColor: view === "client" ? "#8b6914" : "transparent" }}>
-              Menu & Ordini
-            </button>
-            <button className="day-tab" onClick={() => setView("admin")} style={{ color: view === "admin" ? "#f5f0e8" : "#888", borderBottomColor: view === "admin" ? "#8b6914" : "transparent" }}>
-              Admin ⚙
-            </button>
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            {adminUser ? (
+              <>
+                <button className="day-tab" onClick={() => setView("client")} style={{ color: view === "client" ? "#f5f0e8" : "#888", borderBottomColor: view === "client" ? "#8b6914" : "transparent" }}>
+                  Menu & Ordini
+                </button>
+                <button className="day-tab" onClick={() => setView("admin")} style={{ color: view === "admin" ? "#f5f0e8" : "#888", borderBottomColor: view === "admin" ? "#8b6914" : "transparent" }}>
+                  Admin ⚙
+                </button>
+                <button onClick={handleLogout} style={{ marginLeft: 8, background: "transparent", border: "1px solid #555", color: "#888", padding: "4px 12px", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer", letterSpacing: 0.5 }}>
+                  Esci
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setShowLogin(true)} style={{ background: "transparent", border: "none", color: "#555", fontFamily: "'DM Sans', sans-serif", fontSize: 12, cursor: "pointer", letterSpacing: 0.5, padding: "4px 8px" }}>
+                ⚙
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -251,7 +307,6 @@ export default function App() {
                   <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Nome e cognome *</label>
                   <input placeholder="Es. Marco Bianchi" value={orderForm.name} onChange={(e) => setOrderForm((f) => ({ ...f, name: e.target.value }))} style={{ maxWidth: 320 }} />
                 </div>
-
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 12 }}>Selezione *</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -264,12 +319,10 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Note (facoltativo)</label>
                   <textarea placeholder="Allergie, intolleranze, preferenze..." value={orderForm.note} onChange={(e) => setOrderForm((f) => ({ ...f, note: e.target.value }))} style={{ resize: "vertical", minHeight: 70, maxWidth: 400 }} />
                 </div>
-
                 <button className="btn-primary" onClick={handleOrder} disabled={submitting}>
                   {submitting ? "Invio in corso..." : "Invia prenotazione"}
                 </button>
@@ -279,34 +332,19 @@ export default function App() {
         )}
 
         {/* ADMIN VIEW */}
-        {view === "admin" && (
+        {view === "admin" && adminUser && (
           <div className="fade-in">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
               <div>
                 <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: "#2c2c2c" }}>Pannello Admin</h2>
                 <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#888", marginTop: 4 }}>{orders.length} ordini ricevuti oggi</p>
               </div>
-              <button
-                onClick={toggleSuspended}
-                style={{
-                  padding: "10px 22px",
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  border: "none",
-                  background: suspended ? "#2d5a27" : "#8b2020",
-                  color: "white",
-                  letterSpacing: 0.5,
-                  transition: "all 0.2s",
-                }}
-              >
+              <button onClick={toggleSuspended} style={{ padding: "10px 22px", fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", background: suspended ? "#2d5a27" : "#8b2020", color: "white", letterSpacing: 0.5, transition: "all 0.2s" }}>
                 {suspended ? "Riapri ordinazioni" : "Sospendi ordinazioni"}
               </button>
             </div>
 
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, marginBottom: 14, color: "#2c2c2c" }}>Ordini ricevuti</h3>
-
             {orders.length === 0 ? (
               <div style={{ background: "white", padding: "24px", fontFamily: "'DM Sans', sans-serif", color: "#888", fontSize: 14 }}>Nessun ordine ancora.</div>
             ) : (
@@ -336,8 +374,7 @@ export default function App() {
 
             <div className="divider" />
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: "#2c2c2c", marginBottom: 16 }}>Gestione menu settimanale</h3>
-
-            {menu.map((day, idx) => (
+            {menu.map((day) => (
               <div key={day.id} style={{ background: "white", padding: "16px 20px", marginBottom: 10, borderLeft: `3px solid ${day.is_today ? "#8b6914" : "#d4cfc4"}` }}>
                 {editingDay === day.id ? (
                   <div>
