@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const fields = [
   { key: "primo", label: "Primo" },
@@ -567,6 +568,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <SpeedInsights />
     </div>
   );
 }
