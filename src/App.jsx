@@ -37,14 +37,12 @@ export default function App() {
   const [newOrderCount, setNewOrderCount] = useState(0);
   const initialLoadDone = useRef(false);
 
-  // Richiedi permesso notifiche quando admin è loggato
   useEffect(() => {
     if (adminUser && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, [adminUser]);
 
-  // Setup iniziale
   useEffect(() => {
     loadMenu();
     loadSuspended();
@@ -57,7 +55,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Carica ordini iniziali
   useEffect(() => {
     supabase
       .from("orders")
@@ -72,7 +69,6 @@ export default function App() {
       });
   }, []);
 
-  // Realtime ordini
   useEffect(() => {
     const channel = supabase
       .channel("orders-realtime-v2")
@@ -92,12 +88,22 @@ export default function App() {
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Realtime settings
   useEffect(() => {
     const channel = supabase
       .channel("settings-realtime-v2")
       .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, (payload) => {
         if (payload.new?.key === "suspended") setSuspended(payload.new.value === "true");
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // Realtime menu (per aggiornare disponibilità in tempo reale)
+  useEffect(() => {
+    const channel = supabase
+      .channel("menu-realtime")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "menu" }, () => {
+        loadMenu();
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
@@ -197,7 +203,29 @@ export default function App() {
     loadMenu();
   }
 
+  async function toggleFieldVisibility(dayId, fieldKey, currentHidden, currentUnavailable, action) {
+    // action: 'hide' | 'unavailable' | 'restore'
+    let newHidden = [...(currentHidden || [])];
+    let newUnavailable = [...(currentUnavailable || [])];
+
+    // Prima rimuovi da entrambi
+    newHidden = newHidden.filter(f => f !== fieldKey);
+    newUnavailable = newUnavailable.filter(f => f !== fieldKey);
+
+    if (action === "hide") newHidden.push(fieldKey);
+    if (action === "unavailable") newUnavailable.push(fieldKey);
+
+    await supabase.from("menu").update({
+      hidden_fields: newHidden,
+      unavailable_fields: newUnavailable,
+    }).eq("id", dayId);
+    loadMenu();
+  }
+
   const today = menu.find((d) => d.is_today) || menu[0];
+  const todayHidden = today?.hidden_fields || [];
+  const todayUnavailable = today?.unavailable_fields || [];
+  const visibleFields = fields.filter(f => !todayHidden.includes(f.key));
 
   if (loading) {
     return (
@@ -232,6 +260,7 @@ export default function App() {
         .order-row { background: white; padding: 14px 18px; margin-bottom: 10px; border-left: 3px solid #8b6914; }
         .suspended-banner { background: #8b2020; color: white; text-align: center; padding: 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; letter-spacing: 0.5px; }
         .badge { background: #8b6914; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; margin-left: 6px; font-family: 'DM Sans', sans-serif; }
+        .field-control-btn { border: none; padding: 4px 10px; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s; }
       `}</style>
 
       {/* Login modal */}
@@ -300,13 +329,21 @@ export default function App() {
               <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#2c2c2c" }}>Menu del giorno</h2>
             </div>
 
+            {/* Menu del giorno — mostra solo campi non nascosti */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 32 }}>
-              {fields.map(({ key, label }) => (
-                <div key={key} style={{ background: "white", padding: "18px 22px", borderTop: "3px solid #8b6914" }}>
-                  <div style={{ fontSize: 10, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, letterSpacing: 1.5, color: "#888", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#2c2c2c" }}>{today[key]}</div>
-                </div>
-              ))}
+              {visibleFields.map(({ key, label }) => {
+                const isUnavailable = todayUnavailable.includes(key);
+                return (
+                  <div key={key} style={{ background: "white", padding: "18px 22px", borderTop: `3px solid ${isUnavailable ? "#c0b090" : "#8b6914"}`, opacity: isUnavailable ? 0.7 : 1 }}>
+                    <div style={{ fontSize: 10, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, letterSpacing: 1.5, color: "#888", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                    {isUnavailable ? (
+                      <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "#a08050", fontStyle: "italic" }}>Non disponibile</div>
+                    ) : (
+                      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 16, color: "#2c2c2c" }}>{today[key]}</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="divider" />
@@ -323,12 +360,21 @@ export default function App() {
 
             {menu[activeDay] && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 36 }}>
-                {fields.map(({ key, label }) => (
-                  <div key={key} style={{ background: "white", padding: "14px 16px" }}>
-                    <div style={{ fontSize: 10, fontFamily: "'DM Sans', sans-serif", letterSpacing: 1.5, color: "#888", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
-                    <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, color: "#2c2c2c" }}>{menu[activeDay][key]}</div>
-                  </div>
-                ))}
+                {fields
+                  .filter(f => !(menu[activeDay].hidden_fields || []).includes(f.key))
+                  .map(({ key, label }) => {
+                    const isUnavailable = (menu[activeDay].unavailable_fields || []).includes(key);
+                    return (
+                      <div key={key} style={{ background: "white", padding: "14px 16px", opacity: isUnavailable ? 0.7 : 1 }}>
+                        <div style={{ fontSize: 10, fontFamily: "'DM Sans', sans-serif", letterSpacing: 1.5, color: "#888", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
+                        {isUnavailable ? (
+                          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#a08050", fontStyle: "italic" }}>Non disponibile</div>
+                        ) : (
+                          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, color: "#2c2c2c" }}>{menu[activeDay][key]}</div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             )}
 
@@ -356,13 +402,15 @@ export default function App() {
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 1, color: "#888", textTransform: "uppercase", display: "block", marginBottom: 12 }}>Selezione *</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {fields.map(({ key, label }) => (
-                      <label key={key} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}>
-                        <input type="checkbox" checked={orderForm[key]} onChange={(e) => setOrderForm((f) => ({ ...f, [key]: e.target.checked }))} />
-                        <span style={{ fontWeight: 400, color: "#555" }}>{label} —</span>
-                        <span style={{ fontFamily: "'Playfair Display', serif", color: "#2c2c2c" }}>{today[key]}</span>
-                      </label>
-                    ))}
+                    {visibleFields
+                      .filter(f => !todayUnavailable.includes(f.key))
+                      .map(({ key, label }) => (
+                        <label key={key} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}>
+                          <input type="checkbox" checked={orderForm[key]} onChange={(e) => setOrderForm((f) => ({ ...f, [key]: e.target.checked }))} />
+                          <span style={{ fontWeight: 400, color: "#555" }}>{label} —</span>
+                          <span style={{ fontFamily: "'Playfair Display', serif", color: "#2c2c2c" }}>{today[key]}</span>
+                        </label>
+                      ))}
                   </div>
                 </div>
                 <div style={{ marginBottom: 20 }}>
@@ -419,54 +467,93 @@ export default function App() {
             )}
 
             <div className="divider" />
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: "#2c2c2c", marginBottom: 16 }}>Gestione menu settimanale</h3>
-            {menu.map((day) => (
-              <div key={day.id} style={{ background: "white", padding: "16px 20px", marginBottom: 10, borderLeft: `3px solid ${day.is_today ? "#8b6914" : "#d4cfc4"}` }}>
-                {editingDay === day.id ? (
-                  <div>
-                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, marginBottom: 12, color: "#8b6914" }}>Modifica {day.day}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 10 }}>
-                      <div>
-                        <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>Giorno</label>
-                        <input value={editForm.day || ""} onChange={(e) => setEditForm((f) => ({ ...f, day: e.target.value }))} />
-                      </div>
-                      <div>
-                        <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>Data</label>
-                        <input value={editForm.date || ""} onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))} />
-                      </div>
-                      {fields.map(({ key, label }) => (
-                        <div key={key}>
-                          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>{label}</label>
-                          <input value={editForm[key] || ""} onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))} />
+            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: "#2c2c2c", marginBottom: 4 }}>Gestione menu settimanale</h3>
+            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#888", marginBottom: 16 }}>Per ogni portata puoi impostarla come non disponibile o nasconderla completamente.</p>
+
+            {menu.map((day) => {
+              const hidden = day.hidden_fields || [];
+              const unavailable = day.unavailable_fields || [];
+              return (
+                <div key={day.id} style={{ background: "white", padding: "16px 20px", marginBottom: 10, borderLeft: `3px solid ${day.is_today ? "#8b6914" : "#d4cfc4"}` }}>
+                  {editingDay === day.id ? (
+                    <div>
+                      <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 600, marginBottom: 12, color: "#8b6914" }}>Modifica {day.day}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 10 }}>
+                        <div>
+                          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>Giorno</label>
+                          <input value={editForm.day || ""} onChange={(e) => setEditForm((f) => ({ ...f, day: e.target.value }))} />
                         </div>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn-primary" style={{ fontSize: 12, padding: "8px 18px" }} onClick={saveEdit}>Salva</button>
-                      <button className="btn-ghost" style={{ fontSize: 12, padding: "8px 18px" }} onClick={() => setEditingDay(null)}>Annulla</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#2c2c2c" }}>{day.day} {day.date}</span>
-                        {day.is_today && <span className="tag" style={{ background: "#8b6914", color: "white", fontSize: 10 }}>Oggi</span>}
+                        <div>
+                          <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>Data</label>
+                          <input value={editForm.date || ""} onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))} />
+                        </div>
+                        {fields.map(({ key, label }) => (
+                          <div key={key}>
+                            <label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>{label}</label>
+                            <input value={editForm[key] || ""} onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))} />
+                          </div>
+                        ))}
                       </div>
-                      <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#888" }}>
-                        {day.primo} · {day.secondo} · {day.contorno} · {day.dessert}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn-primary" style={{ fontSize: 12, padding: "8px 18px" }} onClick={saveEdit}>Salva</button>
+                        <button className="btn-ghost" style={{ fontSize: 12, padding: "8px 18px" }} onClick={() => setEditingDay(null)}>Annulla</button>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {!day.is_today && (
-                        <button className="btn-ghost" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setToday(day.id)}>Imposta oggi</button>
-                      )}
-                      <button className="btn-ghost" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => startEdit(day)}>Modifica</button>
+                  ) : (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#2c2c2c" }}>{day.day} {day.date}</span>
+                          {day.is_today && <span className="tag" style={{ background: "#8b6914", color: "white", fontSize: 10 }}>Oggi</span>}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {!day.is_today && (
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setToday(day.id)}>Imposta oggi</button>
+                          )}
+                          <button className="btn-ghost" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => startEdit(day)}>Modifica</button>
+                        </div>
+                      </div>
+
+                      {/* Controlli visibilità portate */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {fields.map(({ key, label }) => {
+                          const isHidden = hidden.includes(key);
+                          const isUnavailable = unavailable.includes(key);
+                          const status = isHidden ? "hidden" : isUnavailable ? "unavailable" : "visible";
+                          return (
+                            <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: isHidden ? "#f5f0f0" : isUnavailable ? "#fdf8ee" : "#f8f8f5", borderLeft: `2px solid ${isHidden ? "#c09090" : isUnavailable ? "#c0a060" : "#b0c090"}` }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 1, width: 70 }}>{label}</span>
+                                <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 13, color: isHidden ? "#aaa" : isUnavailable ? "#a08050" : "#2c2c2c", textDecoration: isHidden ? "line-through" : "none", fontStyle: isUnavailable ? "italic" : "normal" }}>
+                                  {isHidden ? "nascosto" : isUnavailable ? "non disponibile" : day[key]}
+                                </span>
+                              </div>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                {status !== "visible" && (
+                                  <button className="field-control-btn" onClick={() => toggleFieldVisibility(day.id, key, hidden, unavailable, "restore")} style={{ background: "#eaf4e8", color: "#2d5a27" }}>
+                                    Ripristina
+                                  </button>
+                                )}
+                                {status !== "unavailable" && (
+                                  <button className="field-control-btn" onClick={() => toggleFieldVisibility(day.id, key, hidden, unavailable, "unavailable")} style={{ background: "#fdf0d0", color: "#8b6914" }}>
+                                    Non disponibile
+                                  </button>
+                                )}
+                                {status !== "hidden" && (
+                                  <button className="field-control-btn" onClick={() => toggleFieldVisibility(day.id, key, hidden, unavailable, "hide")} style={{ background: "#f5e8e8", color: "#8b2020" }}>
+                                    Nascondi
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
