@@ -42,7 +42,11 @@ export default function App() {
   useEffect(() => {
     const channel = supabase
       .channel("orders-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadOrders())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+        loadOrders();
+        sendNotification(payload.new?.name || "Qualcuno");
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, () => loadOrders())
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, []);
@@ -72,6 +76,16 @@ export default function App() {
     if (data) setOrders(data);
   }
 
+  function sendNotification(orderName) {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      new Notification("Nuovo ordine ricevuto", {
+        body: `${orderName} ha appena prenotato`,
+        icon: "/favicon.ico",
+      });
+    }
+  }
+
   async function loadSuspended() {
     const { data } = await supabase.from("settings").select("value").eq("key", "suspended").single();
     if (data) setSuspended(data.value === "true");
@@ -89,6 +103,9 @@ export default function App() {
     } else {
       setShowLogin(false);
       setView("admin");
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
     }
     setLoginLoading(false);
   }
