@@ -9,12 +9,22 @@ const fields = [
 ];
 
 function sendNotification(name) {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "granted") {
+  // Notifica browser desktop
+  if ("Notification" in window && Notification.permission === "granted") {
     new Notification("Nuovo ordine ricevuto", {
       body: `${name} ha appena prenotato`,
     });
   }
+  // Notifica push ntfy (telefono)
+  fetch("https://ntfy.sh/Ordini_Mensa_Antonio_PlusFast", {
+    method: "POST",
+    headers: {
+      "Title": "Nuovo ordine ricevuto",
+      "Priority": "default",
+      "Tags": "fork_and_knife",
+    },
+    body: `${name} ha appena prenotato`,
+  }).catch(() => {});
 }
 
 export default function App() {
