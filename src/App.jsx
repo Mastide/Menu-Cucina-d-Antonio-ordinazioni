@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 
 const fields = [
@@ -7,6 +7,15 @@ const fields = [
   { key: "contorno", label: "Contorno" },
   { key: "dessert", label: "Dessert" },
 ];
+
+function sendNotification(name) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    new Notification("Nuovo ordine ricevuto", {
+      body: `${name} ha appena prenotato`,
+    });
+  }
+}
 
 export default function App() {
   const [view, setView] = useState("client");
@@ -25,10 +34,19 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+  const initialLoadDone = useRef(false);
 
+  // Richiedi permesso notifiche quando admin è loggato
+  useEffect(() => {
+    if (adminUser && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, [adminUser]);
+
+  // Setup iniziale
   useEffect(() => {
     loadMenu();
-    loadOrders();
     loadSuspended();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAdminUser(session?.user ?? null);
@@ -39,21 +57,45 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Carica ordini iniziali
+  useEffect(() => {
+    supabase
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setOrders(data);
+          setLoading(false);
+          setTimeout(() => { initialLoadDone.current = true; }, 500);
+        }
+      });
+  }, []);
+
+  // Realtime ordini
   useEffect(() => {
     const channel = supabase
-      .channel("orders-changes")
+      .channel("orders-realtime-v2")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
-        loadOrders();
-        sendNotification(payload.new?.name || "Qualcuno");
+        if (!payload.new) return;
+        setOrders((prev) => [payload.new, ...prev]);
+        if (initialLoadDone.current) {
+          sendNotification(payload.new.name || "Qualcuno");
+          setNewOrderCount((n) => n + 1);
+        }
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, () => loadOrders())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" }, (payload) => {
+        if (!payload.old) return;
+        setOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
+      })
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, []);
 
+  // Realtime settings
   useEffect(() => {
     const channel = supabase
-      .channel("settings-changes")
+      .channel("settings-realtime-v2")
       .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, (payload) => {
         if (payload.new?.key === "suspended") setSuspended(payload.new.value === "true");
       })
@@ -69,21 +111,6 @@ export default function App() {
       setActiveDay(todayIdx >= 0 ? todayIdx : 0);
     }
     setLoading(false);
-  }
-
-  async function loadOrders() {
-    const { data } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
-    if (data) setOrders(data);
-  }
-
-  function sendNotification(orderName) {
-    if (!("Notification" in window)) return;
-    if (Notification.permission === "granted") {
-      new Notification("Nuovo ordine ricevuto", {
-        body: `${orderName} ha appena prenotato`,
-        icon: "/favicon.ico",
-      });
-    }
   }
 
   async function loadSuspended() {
@@ -113,6 +140,7 @@ export default function App() {
   async function handleLogout() {
     await supabase.auth.signOut();
     setView("client");
+    setNewOrderCount(0);
   }
 
   async function handleOrder() {
@@ -203,6 +231,7 @@ export default function App() {
         .day-tab:hover:not(.active) { color: #555; }
         .order-row { background: white; padding: 14px 18px; margin-bottom: 10px; border-left: 3px solid #8b6914; }
         .suspended-banner { background: #8b2020; color: white; text-align: center; padding: 12px; font-family: 'DM Sans', sans-serif; font-size: 13px; letter-spacing: 0.5px; }
+        .badge { background: #8b6914; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; margin-left: 6px; font-family: 'DM Sans', sans-serif; }
       `}</style>
 
       {/* Login modal */}
@@ -241,8 +270,8 @@ export default function App() {
                 <button className="day-tab" onClick={() => setView("client")} style={{ color: view === "client" ? "#f5f0e8" : "#888", borderBottomColor: view === "client" ? "#8b6914" : "transparent" }}>
                   Menu & Ordini
                 </button>
-                <button className="day-tab" onClick={() => setView("admin")} style={{ color: view === "admin" ? "#f5f0e8" : "#888", borderBottomColor: view === "admin" ? "#8b6914" : "transparent" }}>
-                  Admin ⚙
+                <button className="day-tab" onClick={() => { setView("admin"); setNewOrderCount(0); }} style={{ color: view === "admin" ? "#f5f0e8" : "#888", borderBottomColor: view === "admin" ? "#8b6914" : "transparent", display: "flex", alignItems: "center" }}>
+                  Admin ⚙{newOrderCount > 0 && <span className="badge">{newOrderCount}</span>}
                 </button>
                 <button onClick={handleLogout} style={{ marginLeft: 8, background: "transparent", border: "1px solid #555", color: "#888", padding: "4px 12px", fontFamily: "'DM Sans', sans-serif", fontSize: 11, cursor: "pointer", letterSpacing: 0.5 }}>
                   Esci
