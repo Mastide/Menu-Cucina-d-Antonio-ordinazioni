@@ -26,6 +26,17 @@ function sendNotification(name) {
   }).catch(() => {});
 }
 
+function sendBistrotNotification(name, people, timeSlot) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Nuova prenotazione Bistrot", { body: `${name} — ${people} ${people === 1 ? "persona" : "persone"} alle ${timeSlot}` });
+  }
+  fetch("https://ntfy.sh/Ordini_Mensa_Antonio_PlusFast", {
+    method: "POST",
+    headers: { "Title": "Nuova prenotazione Bistrot", "Priority": "default", "Tags": "fork_and_knife" },
+    body: `${name} — ${people} ${people === 1 ? "persona" : "persone"} alle ${timeSlot}`,
+  }).catch(() => {});
+}
+
 function CustomDropdown({ options, value, onChange, disabled, placeholder }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -136,7 +147,11 @@ export default function App() {
 
   useEffect(() => {
     const ch = supabase.channel("bistrot-bookings-rt").on("postgres_changes", { event: "INSERT", schema: "public", table: "bistrot_bookings" }, (p) => {
-      if (p.new) { setBistrotBookings(prev => [p.new, ...prev]); setNewBookingCount(n => n + 1); }
+      if (p.new) {
+        setBistrotBookings(prev => [p.new, ...prev]);
+        setNewBookingCount(n => n + 1);
+        sendBistrotNotification(p.new.name || "Qualcuno", p.new.people || 1, p.new.time_slot || "");
+      }
     }).on("postgres_changes", { event: "DELETE", schema: "public", table: "bistrot_bookings" }, (p) => {
       if (p.old) setBistrotBookings(prev => prev.filter(b => b.id !== p.old.id));
     }).subscribe();
