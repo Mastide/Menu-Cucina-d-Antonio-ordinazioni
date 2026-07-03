@@ -573,12 +573,12 @@ export default function App() {
           <div className="fade-in">
             <div style={{ textAlign: "center", padding: "48px 24px 36px" }}>
               <div style={{ fontSize: 11, letterSpacing: 6, color: "#9bb8d3", textTransform: "uppercase", marginBottom: 12 }}>Prossimamente</div>
-              <h2 className="script-title" style={{ fontSize: 72, lineHeight: 1, marginBottom: 16 }}>Coming Soon</h2>
+              <h2 className="script-title" style={{ fontSize: 72, lineHeight: 1, marginBottom: 16, textTransform: "uppercase" }}>Coming Soon</h2>
               <div style={{ height: 1, background: "rgba(255,255,255,0.2)", maxWidth: 200, margin: "0 auto" }} />
             </div>
             <div className="card" style={{ padding: "28px 32px", marginBottom: 32 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, color: "#9bb8d3", textTransform: "uppercase", marginBottom: 8 }}>Bistrot EngineerEat</div>
-              <h2 className="script-title hero-title" style={{ marginBottom: 12 }}>Stacca davvero la spina.</h2>
+              <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 2, color: "#c0392b", textTransform: "uppercase", marginBottom: 8 }}>Bistrot EngineerEat</div>
+              <h2 className="script-title hero-title" style={{ marginBottom: 12, textTransform: "uppercase" }}>Stacca davvero la spina.</h2>
               <p style={{ fontSize: 14, color: "#9bb8d3", lineHeight: 1.75, maxWidth: 620 }}>
                 Niente scrivania, niente schermo — solo un tavolo apparecchiato, un calice di vino o una bibita fresca e il tempo per respirare. Il Bistrot è il nostro modo di dirti che una pausa vera vale quanto un'ottima riunione. Prenota il tuo posto, scegli dal menù dedicato e concediti una mezzora che fa bene all'umore e alla giornata.
               </p>
