@@ -339,7 +339,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Antonio', sans-serif", minHeight: "100vh", backgroundColor: "#1c3c5e" }}>
+    <div style={{ fontFamily: "'Antonio', sans-serif", minHeight: "100vh", backgroundImage: "url('/Sfondo.jpg')", backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundColor: "#1c3c5e" }}>
       <style>{`
         @font-face { font-family: 'Antonio'; src: url('/Antonio.TTF') format('truetype'); font-weight: 100 900; font-style: normal; }
         @font-face { font-family: 'Nickainley'; src: url('/Nickainley.OTF') format('opentype'); font-weight: normal; font-style: normal; }
