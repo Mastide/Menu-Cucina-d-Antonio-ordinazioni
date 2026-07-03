@@ -339,13 +339,13 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Antonio', sans-serif", minHeight: "100vh", background: "url('/Sfondo.jpg') center center / cover fixed" }}>
+    <div style={{ fontFamily: "'Antonio', sans-serif", minHeight: "100vh", backgroundColor: "#1c3c5e" }}>
       <style>{`
         @font-face { font-family: 'Antonio'; src: url('/Antonio.TTF') format('truetype'); font-weight: 100 900; font-style: normal; }
         @font-face { font-family: 'Nickainley'; src: url('/Nickainley.OTF') format('opentype'); font-weight: normal; font-style: normal; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: url('/Sfondo.jpg') center center / cover fixed; background-color: #1c3c5e; }
-        html { background-color: #1c3c5e; }
+        html, body { min-height: 100%; background-color: #1c3c5e; }
+        body { background-image: url('/Sfondo.jpg'); background-size: cover; background-position: center; background-attachment: scroll; background-repeat: no-repeat; }
         .fade-in { animation: fadeIn 0.4s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .btn-primary { background: #fff; color: #1c3c5e; border: none; padding: 13px 28px; font-family: 'Antonio', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; border-radius: 2px; }
