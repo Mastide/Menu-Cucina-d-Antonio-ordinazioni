@@ -402,8 +402,8 @@ export default function App() {
             <span style={{ color: "#7f9cb8", fontSize: 11, letterSpacing: 2 }}>ORDINAZIONI</span>
           </div>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <button className="day-tab" onClick={() => setClientTab("menu")} style={{ color: clientTab === "menu" && !adminUser ? "#fff" : "#7f9cb8", borderBottomColor: clientTab === "menu" && !adminUser ? "#fff" : "transparent" }}>Menu & Ordini</button>
-            <button className="day-tab" onClick={() => setClientTab("bistrot")} style={{ color: clientTab === "bistrot" && !adminUser ? "#fff" : "#7f9cb8", borderBottomColor: clientTab === "bistrot" && !adminUser ? "#fff" : "transparent" }}>Bistrot</button>
+            <button className="day-tab" onClick={() => setClientTab("menu")} style={{ color: clientTab === "menu" ? "#fff" : "#7f9cb8", borderBottomColor: clientTab === "menu" ? "#fff" : "transparent" }}>Menu & Ordini</button>
+            <button className="day-tab" onClick={() => setClientTab("bistrot")} style={{ color: clientTab === "bistrot" ? "#fff" : "#7f9cb8", borderBottomColor: clientTab === "bistrot" ? "#fff" : "transparent" }}>Bistrot</button>
             {adminUser ? (
               <>
                 <button className="day-tab" onClick={() => setClientTab("admin")} style={{ color: clientTab === "admin" ? "#fff" : "#7f9cb8", borderBottomColor: clientTab === "admin" ? "#fff" : "transparent", display: "flex", alignItems: "center" }}>
@@ -582,6 +582,11 @@ export default function App() {
               <p style={{ fontSize: 14, color: "#dce8f0", lineHeight: 1.75, maxWidth: 620 }}>
                 Niente scrivania, niente schermo — solo un tavolo apparecchiato, un calice di vino o una bibita fresca e il tempo per respirare. Il Bistrot è il nostro modo di dirti che una pausa vera vale quanto un'ottima riunione. Prenota il tuo posto, scegli dal menù dedicato e concediti una mezzora che fa bene all'umore e alla giornata.
               </p>
+              <div style={{ marginTop: 20, padding: "12px 16px", borderLeft: "3px solid #e8453c", background: "rgba(232,69,60,0.08)" }}>
+                <p style={{ fontSize: 13, color: "#dce8f0", lineHeight: 1.6, margin: 0, fontStyle: "italic" }}>
+                  Menù dedicato · Non il solito asporto — un'esperienza diversa, pensata per chi vuole prendersi davvero una pausa.
+                </p>
+              </div>
             </div>
 
             {!bistrotLocked && (
