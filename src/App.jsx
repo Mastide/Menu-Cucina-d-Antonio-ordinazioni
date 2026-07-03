@@ -344,7 +344,8 @@ export default function App() {
         @font-face { font-family: 'Antonio'; src: url('/Antonio.TTF') format('truetype'); font-weight: 100 900; font-style: normal; }
         @font-face { font-family: 'Nickainley'; src: url('/Nickainley.OTF') format('opentype'); font-weight: normal; font-style: normal; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: url('/Sfondo.jpg') center center / cover fixed; }
+        body { background: url('/Sfondo.jpg') center center / cover fixed; background-color: #1c3c5e; }
+        html { background-color: #1c3c5e; }
         .fade-in { animation: fadeIn 0.4s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .btn-primary { background: #fff; color: #1c3c5e; border: none; padding: 13px 28px; font-family: 'Antonio', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; letter-spacing: 0.5px; transition: all 0.2s; border-radius: 2px; }
@@ -586,11 +587,13 @@ export default function App() {
         {/* ---- BISTROT ---- */}
         {clientTab === "bistrot" && (
           <div className="fade-in">
+            {bistrotLocked && (
             <div style={{ textAlign: "center", padding: "48px 24px 36px" }}>
               <div style={{ fontSize: 11, letterSpacing: 6, color: "#9bb8d3", textTransform: "uppercase", marginBottom: 12 }}>Prossimamente</div>
               <h2 style={{ fontFamily: "'Antonio', sans-serif", fontSize: 72, lineHeight: 1, marginBottom: 16, color: "#fff", fontWeight: 700, letterSpacing: 4 }}>COMING SOON</h2>
               <div style={{ height: 1, background: "rgba(255,255,255,0.2)", maxWidth: 200, margin: "0 auto" }} />
             </div>
+            )}
             <div className="card" style={{ padding: "28px 32px", marginBottom: 32 }}>
               <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 3, color: "#e8453c", textTransform: "uppercase", marginBottom: 8 }}>Bistrot EngineerEat</div>
               <h2 className="script-title hero-title" style={{ marginBottom: 12 }}>Stacca davvero la spina.</h2>
